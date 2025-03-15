@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+    
+
+<!-- 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Risk Location</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" /> -->
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header-container {
+            background-color: #0000FF;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            height: 80px;
+        }
+
+        .logo {
+            width: 200px;
+            height: auto;
+        }
+
+        .header-text {
+            color: white;
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .map-container {
+            display: flex;
+            flex-grow: 1;
+            position: relative;
+            border: 5px solid black;
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: #2c0fd1;
+            color: white;
+            padding: 20px;
+            transition: width 0.3s ease;
+            overflow: hidden;
+        }
+
+        .sidebar-container {
+            display: flex;
+            transition: 0.3s;
+        }
+
+
+        .sidebar-container.active {
+            left: 0; /* Slide in */
+        }
+
+
+
+        .hidden {
+            display: none !important;
+        }
+
+        .map-wrapper {
+            flex-grow: 1;
+            height: 100%;
+        }
+
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        #map { height: 100%; width: 100%; }
+
+        /* Floating Button */
+        .floating-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: #0000FF;
+            color: white;
+            border: none;
+            font-size: 20px;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 50%;
+            z-index: 1000;
+        }
+
+
+
+
+
+        /* Styles for tabs and checkboxes */
+        .tab-container {
+            margin-top: 20px;
+        }
+        .tab-header {
+            display: flex;
+            background-color: #ddd;
+        }
+        .tab-header div {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            background-color: lightgray;
+        }
+        .tab-header div.active {
+            background-color: white;
+            font-weight: bold;
+            color: black;
+        }
+
+        .tab-content.active {
+            display: block;
+            color: black;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 10px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            color: black;
+        }
+
+
+        /* Floating container style */
+        .floating-container {
+            position: absolute;
+            top: 50px; /* Adjust this value to set how far from the top the container should be */
+            left: 20px; /* Adjust this to control the left position */
+            width: 600px; /* Set the width of the container */
+            height: auto;
+            background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 9999; /* Ensure the container is on top of the map */
+            display: none; /* Initially hidden */
+            cursor: move; /* Cursor changes to indicate draggable area */
+        }
+
+        /* Style for the graphs */
+        .floating-container img {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-container">
+            <div class="header-text">High-Risk Location</div>
+            <img src="{{ url_for('static', filename='actionlab.png') }}" alt="UTA Logo" class="logo">
+        </div>
+
+        <div class="map-container">
+
+            <!-- Floating container to display graphs -->
+            <div id="graphContainer" class="floating-container">
+                <!-- Close button -->
+                <button id="closeButton" style="position: absolute; top: 10px; right: 10px; background-color: red; color: white; border: none; padding: 5px 10px; cursor: pointer;">X</button>
+                
+                <!-- Download button -->
+                <button id="downloadButton" style="position: absolute; top: 10px; right: 50px; background-color: green; color: white; border: none; padding: 5px 10px; cursor: pointer;">Download</button>
+
+                <div id="graphs"></div>
+            </div> 
+
+
+
+            <!-- Sidebar Container -->
+            <div class="sidebar-container" id="sidebarContainer">
+                <div class="sidebar">
+                    <label for="reportType">Frequency:</label>
+                    <select id="reportType" style="width: 100%; padding: 5px; margin-bottom: 10px;" onchange="toggleDateInputs()">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                    <br><br>
+                
+                    <!-- Daily Date Picker -->
+                    <div id="dailyDate">
+                        <label>Select Date:</label>
+                        <input type="date" id="datepicker" style="width: 95%; padding: 5px; margin-bottom: 10px;" onchange="updateSelectedDate()">
+                    </div>
+                
+                    <!-- Weekly Date Pickers (Hidden Initially) -->
+                    <div id="weeklyDate" style="display: none;">
+                        <label>From:</label>
+                        <input type="date" id="fromDate" style="width: 95%; padding: 5px; margin-bottom: 10px;" onchange="setToDate()">
+                        <label>To:</label>
+                        <input type="date" id="toDate" style="width: 95%; padding: 5px; margin-bottom: 10px;" readonly>
+                    </div>
+
+                    <br>
+
+                    <!-- <label for="timeSelect">Select Hour:</label>
+                    <select id="timeSelect" onchange="updateSelectedDate()">
+                        <script>
+                            for (let i = 0; i < 24; i++) {
+                                document.write(`<option value="${i}">${i}:00</option>`);
+                            }
+                        </script>
+                    </select> -->
+
+                    <label for="timeSlider">Select Hour:</label>
+                    <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" oninput="updateSelectedDate()">
+                    <span id="selectedTime">0:00</span>
+                    <button id="playButton" onclick="togglePlay()">Play</button>
+
+                    <br>
+                    <br>
+
+                    
+                    <label><input type="checkbox" id="networkLayer"> San Antonio Network</label><br>
+                
+                    
+                    <br>
+
+                    <label><input type="checkbox" id="HardbrakeLayer"> Hard Brakes Heat Map</label><br>
+                    
+
+                    <!-- <label><input type="checkbox" id="EmissionLayer"> Emission Heat Map</label><br>
+                    <label><input type="checkbox" id="NumberofstopsLayer"> Number of Stops Heat Map</label><br> -->
+
+                    <div class="tab-container" style="width: 100%">
+                        <div class="tab-header">
+                            <div onclick="openTab(event, '2D')" class="tab-link active" data-tab="2D">2D</div>
+                            <div onclick="openTab(event, '3D')" class="tab-link" data-tab="3D">3D</div>
+                        </div>
+                        <div id="2D" class="tab-content active">
+                            <label><input type="checkbox" id="hardBrakes" class="tab-2D"> Hard Brakes</label><br>
+                            <label><input type="checkbox" id="emission" class="tab-2D"> Emission</label><br>
+                            <label><input type="checkbox" id="numStops" class="tab-2D"> Number of Stops</label>
+                        </div>
+                        <div id="3D" class="tab-content">
+                            <label><input type="checkbox" id="allMOEs" class="tab-3D"> All MOEs</label>
+                        </div>
+                    </div>
+                    <br>
+                    <br>
+                    <label for="slider">No of Locations:</label>
+                    <input type="range" id="slider" min="0" max="300" value="100" oninput="updateSliderValue()">
+                    <span id="sliderValue">100</span>
+
+
+                    <br>
+                    <button id="fetchButton" style="margin-top: 10px; padding: 10px; background-color: white; color: rgb(0, 0, 0); border: none; cursor: pointer;">Fetch</button>
+                    
+
+
+
+                    <!-- Button to trigger image display -->
+                    <button id="graphsButton" style="margin-top: 10px; padding: 10px; background-color: white; color: rgb(0, 0, 0); border: none; cursor: pointer; margin-left: 10px;">Graphs</button>
+
+                                        
+
+                </div>
+            </div>
+
+            <div class="map-wrapper">
+
+                <div id="map"></div> 
+
+                <div id="infoBox" style="position: absolute; top: 20px; right: 20px; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); font-family: Arial, sans-serif; z-index: 1000; display: none;">
+                    <h3>Features</h3>
+                    <p><strong><span id="linkID"></span></strong> </p>
+                    <p><strong><span id="fromNode"></span></strong></p>
+                    <p><strong><span id="toNode"></span></strong></p>
+                    <p><strong><span id="gid"></span></strong></p>
+                    <p><strong><span id="roadType"></span></strong></p>
+                    <p><strong><span id="heading"></span></strong></p>
+                    <p><strong><span id="length"></span></strong></p>
+                    <!-- Close Button -->
+                    <span id="closeInfoBox" style="position: absolute; top: 5px; right: 5px; font-size: 50px; color: red; cursor: pointer;">&times;</span>
+                </div>
+              
+                <!-- Floating Button -->
+                <button class="floating-btn" onclick="toggleSidebar()">☰</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="https://unpkg.com/leaflet-heat@0.2.0/dist/leaflet-heat.js"></script>
+
+    
+    <script>
+
+        var map = L.map('map').setView([29.424349, -98.491142], 11);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // fetch('/data')
+        //     .then(response => response.json())
+        //     .then(data => {
+        //         data.forEach(location => {
+        //             L.marker([location.lat, location.lng])
+        //                 .addTo(map)
+        //                 .bindPopup(location.name);
+        //         });
+        //     });
+
+        // $(function() {
+        //     $("#datepicker").datepicker();
+        // });
+
+        function toggleSidebar() {
+            var sidebarContainer = document.getElementById('sidebarContainer');
+            sidebarContainer.classList.toggle('hidden');
+        }
+
+        function openTab(event, tabName) {
+            // Remove active class from all tabs
+            document.querySelectorAll(".tab-header div").forEach(tab => tab.classList.remove("active"));
+
+            // Add active class to the clicked tab
+            event.currentTarget.classList.add("active");
+
+            // Hide all tab content and show the selected one
+            document.querySelectorAll(".tab-content").forEach(tab => tab.classList.remove("active"));
+            document.getElementById(tabName).classList.add("active");
+
+            // Store active tab in a global variable
+            document.getElementById("selectedTab").value = tabName; 
+        }
+
+
+
+        function updateSliderValue() {
+            document.getElementById('sliderValue').innerText = document.getElementById('slider').value;
+        }
+    
+        function openTab(event, tabName) {
+            // Reset all checkboxes when switching tabs
+            document.querySelectorAll(".tab-2D").forEach(cb => cb.checked = false);
+            document.querySelectorAll(".tab-3D").forEach(cb => cb.checked = false);
+            
+            document.querySelectorAll(".tab-content").forEach(tab => tab.classList.remove("active"));
+            document.getElementById(tabName).classList.add("active");
+            document.querySelectorAll(".tab-header div").forEach(tab => tab.classList.remove("active"));
+            event.currentTarget.classList.add("active");
+        }
+
+        // Limit selection to two checkboxes in the 2D tab
+        document.querySelectorAll(".tab-2D").forEach(checkbox => {
+            checkbox.addEventListener("change", function () {
+                let checkedBoxes = document.querySelectorAll(".tab-2D:checked");
+                if (checkedBoxes.length > 2) {
+                    this.checked = false;
+                }
+            });
+        });
+
+        // Ensure only one checkbox is selected in the 3D tab
+        document.querySelectorAll(".tab-3D").forEach(checkbox => {
+            checkbox.addEventListener("change", function () {
+                document.querySelectorAll(".tab-3D").forEach(cb => cb.checked = false);
+                this.checked = true;
+            });
+        });
+
+
+        let currentMarkers = new L.LayerGroup(); // Layer group to manage markers
+
+        document.getElementById("fetchButton").addEventListener("click", function () {
+            // let selectedDate = document.getElementById("datepicker").value;
+
+            let selectedDate = getSelectedDate();
+            let sliderValue = document.getElementById("slider").value;
+            let activeTab = document.querySelector(".tab-header .active")?.dataset.tab || "Unknown";
+
+            let selectedCheckboxes = [];
+            document.querySelectorAll("input[type=checkbox]:checked").forEach(cb => {
+                selectedCheckboxes.push(cb.id);
+            });
+
+            // Get report type (daily/weekly)
+            let reportType = document.getElementById("reportType").value;
+            let fromDate = document.getElementById("fromDate").value;
+            let toDate = document.getElementById("toDate").value;
+            
+            let checkboxes2D = document.querySelectorAll(".tab-2D:checked");
+            let allMOECheckbox = document.getElementById("allMOEs");
+
+            //Condition 1: Check if a date is selected
+            if ((reportType === "daily" && !selectedDate) || (reportType === "weekly" && (!fromDate || !toDate))) {
+                alert("❌ Please select a valid date before proceeding.");
+                return;
+            }
+
+            // **Updated Condition 2: Ensure at least 2 checkboxes are checked only if the 2D tab is active**
+            if (activeTab === "2D" && checkboxes2D.length < 2) {
+                alert("❌ Please select at least two checkboxes in the 2D tab.");
+                return;
+            }
+
+            // **Updated Condition 3: In 3D mode, ensure 'All MOEs' is checked**
+            if (activeTab === "3D" && !allMOECheckbox.checked) {
+                alert("❌ Please select 'All MOEs' in the 3D tab.");
+                return;
+            }
+
+            fetch('/get_data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: getSelectedDate(),
+                    selectedCheckboxes: selectedCheckboxes,
+                    sliderValue: sliderValue,
+                    selectedTab: activeTab
+                })
+            })
+            .then(response => response.json()) 
+            .then(data => {
+                console.log("Response from server:", data);
+
+                if (!data || !data.markers || data.markers.length === 0) {
+                    alert("⚠️ No data available for this day.");
+                    return;
+                }
+
+                // ✅ Clear previous markers before adding new ones
+                clearMarkers();
+
+                // ✅ Add new markers
+                addMarkersToMap(data.markers);
+            })
+            .catch(error => {
+                alert("❌ Error fetching data: " + error.message); // ✅ Show fetch error
+                console.error('Fetch Error:', error);
+            });
+
+        });
+
+        // Function to clear existing markers
+        function clearMarkers() {
+            currentMarkers.clearLayers(); // Removes all markers from the map
+        }
+
+        // // Function to add markers to the map
+        // function addMarkersToMap(markers) {
+        //     if (!markers || markers.length === 0) return;
+
+        //     markers.forEach(markerData => {
+        //         let marker = L.marker([markerData.lat, markerData.lon])
+        //             .bindPopup(`ID: ${markerData.ID}, Average_Hardbrake: ${markerData.Average_Hardbrake}, Average_CO2: ${markerData.Average_CO2}, Average_Stops: ${markerData.Average_Stops}, Lat: ${markerData.lat} Lon: ${markerData.lon}`);
+
+        //         currentMarkers.addLayer(marker); // Add to LayerGroup
+        //     });
+
+        //     map.addLayer(currentMarkers); // Ensure layer group is added to map
+        // }
+
+
+
+        // Function to add markers to the map
+        function addMarkersToMap(markers, selectedTab) {
+            if (!markers || markers.length === 0) {
+                console.log("No markers to add.");
+                return;
+            }
+
+            console.log("Markers received:", markers);
+            console.log("Selected Tab:", selectedTab);
+
+            markers.forEach(markerData => {
+                console.log("Processing marker:", markerData);
+
+                // Create a formatted popup with bold labels and line breaks
+                let popupContent = `
+                    <b>ID:</b> ${markerData.ID}<br>
+                    <b>Lat:</b> ${markerData.lat}<br>
+                    <b>Lon:</b> ${markerData.lon}
+                `;
+
+                // Append selected options dynamically with bold labels
+                if ("Average_Hardbrake" in markerData) {
+                    popupContent += `<br><b>Average Hardbrake:</b> ${markerData.Average_Hardbrake}`;
+                }
+                if ("Average_CO2" in markerData) {
+                    popupContent += `<br><b>Average CO2:</b> ${markerData.Average_CO2}`;
+                }
+                if ("Average_Stops" in markerData) {
+                    popupContent += `<br><b>Average Stops:</b> ${markerData.Average_Stops}`;
+                }
+
+                console.log("Popup Content:", popupContent);
+
+                let marker = L.marker([markerData.lat, markerData.lon])
+                    .bindPopup(popupContent);
+
+                currentMarkers.addLayer(marker); // Add to LayerGroup
+            });
+
+            map.addLayer(currentMarkers); // Ensure layer group is added to map
+            console.log("Markers added to the map.");
+        }
+
+
+
+
+        function toggleDateInputs() {
+            var reportType = document.getElementById("reportType").value;
+            if (reportType === "daily") {
+                document.getElementById("dailyDate").style.display = "block";
+                document.getElementById("weeklyDate").style.display = "none";
+            } else {
+                document.getElementById("dailyDate").style.display = "none";
+                document.getElementById("weeklyDate").style.display = "block";
+            }
+        }
+
+        function setToDate() {
+            var fromDate = document.getElementById("fromDate").value;
+            if (fromDate) {
+                var fromDateObj = new Date(fromDate);
+                var toDateObj = new Date(fromDateObj);
+                toDateObj.setDate(fromDateObj.getDate() + 6); // 7-day range
+
+                var toDateFormatted = toDateObj.toISOString().split("T")[0];
+                document.getElementById("toDate").value = toDateFormatted;
+            }
+        }
+
+
+
+        let selectedDate = [];  // Global array to store selected dates
+
+        function toggleDateInputs() {
+            let reportType = document.getElementById("reportType").value;
+            let dailyDateDiv = document.getElementById("dailyDate");
+            let weeklyDateDiv = document.getElementById("weeklyDate");
+
+            if (reportType === "daily") {
+                dailyDateDiv.style.display = "block";
+                weeklyDateDiv.style.display = "none";
+            } else {
+                dailyDateDiv.style.display = "none";
+                weeklyDateDiv.style.display = "block";
+                document.getElementById("fromDate").value = ""; // Reset fromDate
+                document.getElementById("toDate").value = "";   // Reset toDate
+            }
+        }
+
+        function setToDate() {
+            let fromDate = document.getElementById("fromDate").value;
+            let toDateInput = document.getElementById("toDate");
+
+            if (fromDate) {
+                let fromDateObj = new Date(fromDate);
+                let toDateObj = new Date(fromDateObj);
+                toDateObj.setDate(fromDateObj.getDate() + 6);  // Set 'To' date to 7 days later
+
+                let toDateStr = toDateObj.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+                toDateInput.value = toDateStr; // Set the value
+            }
+        }
+
+        // Function to get selectedDate before sending request
+        function getSelectedDate() {
+            let reportType = document.getElementById("reportType").value;
+            if (reportType === "daily") {
+                return document.getElementById("datepicker").value; // Single date
+            } else {
+                let fromDate = document.getElementById("fromDate").value;
+                let toDate = document.getElementById("toDate").value;
+                
+                if (!fromDate || !toDate) return []; // Return empty if no dates selected
+
+                let dateArray = [];
+                let currentDate = new Date(fromDate);
+                let endDate = new Date(toDate);
+
+                while (currentDate <= endDate) {
+                    dateArray.push(currentDate.toISOString().split('T')[0]); // Add YYYY-MM-DD format
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                return dateArray;
+            }
+        }
+
+
+
+
+
+        var networkLayer; // Variable to hold the network layer
+        var selectedLayer = null; // Variable to track the selected link
+        let heatmapLayer; // Global variable to store the heatmap layer
+        let fromDate = null, toDate = null;
+
+
+        // Function to load the San Antonio network GeoJSON layer
+        function loadNetworkLayer() {
+            if (!networkLayer) {
+                fetch('/static/san.geojson')
+                    .then(response => response.json())
+                    .then(data => {
+                        networkLayer = L.geoJSON(data, {
+                            style: {
+                                color: "red",
+                                weight: 2,
+                                opacity: 0.7
+                            },
+                            onEachFeature: function (feature, layer) {
+                                if (feature.properties) {
+                                    // Round the length to the nearest whole number
+                                    let length = Math.round(feature.properties.length);
+
+                                    // Click event to select & highlight the clicked link
+                                    layer.on("click", function () {
+                                        // If there's a previously selected link, reset its style
+                                        if (selectedLayer) {
+                                            selectedLayer.setStyle({ weight: 2, opacity: 0.7 }); // Reset previous selection
+                                        }
+                                        selectedLayer = this;
+                                        this.setStyle({
+                                            weight: 6,
+                                            opacity: 1,
+                                            color: "blue" // Highlight color for selected link
+                                        });
+
+                                        // Show the overlay box with the selected link information
+                                        document.getElementById("infoBox").style.display = "block"; // Show the box
+
+                                        // Update the overlay box with the selected link information
+                                        document.getElementById("linkID").textContent = "Link ID: " + feature.properties.LinkID;
+                                        document.getElementById("fromNode").textContent = "From Node: " + feature.properties.FromNode;
+                                        document.getElementById("toNode").textContent = "To Node: " + feature.properties.ToNode;
+                                        document.getElementById("gid").textContent = "GID: " + feature.properties.GID;
+                                        document.getElementById("roadType").textContent = "Road Type: " + feature.properties.RDBD_TYPE;
+                                        document.getElementById("heading").textContent = "Heading: " + feature.properties.Heading;
+                                        document.getElementById("length").textContent = "Length: " + length + " feet"; // Display rounded length
+
+                                        this.openPopup(); // Show popup on click
+                                    });
+
+                                    // Highlight effect on hover
+                                    layer.on("mouseover", function () {
+                                        this.setStyle({
+                                            weight: 5,
+                                            opacity: 1
+                                        });
+                                    });
+
+                                    // Reset style on mouseout, if not selected
+                                    layer.on("mouseout", function () {
+                                        if (selectedLayer !== this) {
+                                            this.setStyle({
+                                                weight: 2,
+                                                opacity: 0.7
+                                            });
+                                        }
+                                    });
+                                }
+                            }
+                        }).addTo(map);
+                    });
+            } else {
+                if (map.hasLayer(networkLayer)) {
+                    map.removeLayer(networkLayer);
+                } else {
+                    map.addLayer(networkLayer);
+                }
+            }
+        }
+
+        // Toggle the network layer when checkbox is clicked
+        document.getElementById("networkLayer").addEventListener("change", function () {
+            loadNetworkLayer();
+
+            // Hide the overlay box if the checkbox is unchecked
+            if (!this.checked) {
+                document.getElementById("infoBox").style.display = "none"; // Hide the info box
+            }
+        });
+
+        // Close the overlay box when the close button is clicked
+        document.getElementById("closeInfoBox").addEventListener("click", function () {
+            document.getElementById("infoBox").style.display = "none"; // Hide the info box
+        });
+
+
+        // Listen for checkbox click
+        document.getElementById("HardbrakeLayer").addEventListener("change", function () {
+            if (this.checked) {
+                loadHeatmapData();
+            } else {
+                removeHeatmap();
+            }
+        });
+
+
+        ////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+
+        let playInterval = null; // Variable to store interval ID
+        let isPlaying = false; // Play/Pause status
+
+
+        function togglePlay() {
+            const playButton = document.getElementById("playButton");
+            const timeSlider = document.getElementById("timeSlider");
+
+            if (isPlaying) {
+                clearInterval(playInterval);
+                playButton.textContent = "Play";
+            } else {
+                playInterval = setInterval(() => {
+                    let currentValue = parseInt(timeSlider.value, 10);
+                    if (currentValue < 23) {
+                        timeSlider.value = currentValue + 1;
+                        updateSelectedDate();
+                    } else {
+                        clearInterval(playInterval); // Stop when reaching 23
+                        playButton.textContent = "Play";
+                        isPlaying = false;
+                    }
+                }, 5000); // Change value every 5 seconds
+                playButton.textContent = "Pause";
+            }
+            isPlaying = !isPlaying;
+        }
+
+
+        function toggleDateInputs() {
+            const frequency = document.getElementById("reportType").value;
+            const dailyDateDiv = document.getElementById("dailyDate");
+            const weeklyDateDiv = document.getElementById("weeklyDate");
+            const hardBrakeLayer = document.getElementById("HardbrakeLayer");
+            const timeSlider = document.getElementById("timeSlider"); // Updated for slider
+            const selectedTimeDisplay = document.getElementById("selectedTime");
+
+            if (frequency === "daily") {
+                dailyDateDiv.style.display = "block";
+                weeklyDateDiv.style.display = "none";
+                hardBrakeLayer.disabled = false; // Enable checkbox
+                timeSlider.disabled = false; // Enable hour selection
+            } else {
+                dailyDateDiv.style.display = "none";
+                weeklyDateDiv.style.display = "block";
+                
+                // Disable and uncheck heatmap layer
+                if (hardBrakeLayer.checked) {
+                    hardBrakeLayer.checked = false;
+                    removeHeatmap(); // Remove heatmap if active
+                    heatmapLoaded = false; // Reset heatmap status
+                }
+                hardBrakeLayer.disabled = true; // Disable checkbox
+                timeSlider.disabled = true; // Disable hour selection
+            }
+        }
+
+        // function updateSelectedDate() {
+        //     selectedDate = document.getElementById("datepicker").value;
+        //     selectedHour = parseInt(document.getElementById("timeSlider").value, 10); // Updated for slider
+        //     document.getElementById("selectedTime").textContent = selectedHour + ":00"; // Update displayed hour
+        //     console.log("Selected Date:", selectedDate);
+        //     console.log("Selected Hour:", selectedHour);
+
+        //     // If heatmap is already loaded, update it when the hour changes
+        //     if (heatmapLoaded) {
+        //         loadHeatmapData();
+        //     }
+        // }
+
+        function updateSelectedDate() {
+            selectedDate = document.getElementById("datepicker")?.value || "Not selected"; // Handle missing datepicker
+            selectedHour = parseInt(document.getElementById("timeSlider").value, 10);
+            document.getElementById("selectedTime").textContent = selectedHour + ":00"; // Update displayed hour
+
+            console.log("Selected Date:", selectedDate);
+            console.log("Selected Hour:", selectedHour);
+
+            // If heatmap is already loaded, update it when the hour changes
+            if (typeof heatmapLoaded !== "undefined" && heatmapLoaded) {
+                loadHeatmapData();
+            }
+        }
+
+
+        // function toggleDateInputs() {
+        //     const frequency = document.getElementById("reportType").value;
+        //     const dailyDateDiv = document.getElementById("dailyDate");
+        //     const weeklyDateDiv = document.getElementById("weeklyDate");
+        //     const hardBrakeLayer = document.getElementById("HardbrakeLayer");
+        //     const timeSelect = document.getElementById("timeSelect");
+
+        //     if (frequency === "daily") {
+        //         dailyDateDiv.style.display = "block";
+        //         weeklyDateDiv.style.display = "none";
+        //         hardBrakeLayer.disabled = false; // Enable checkbox
+        //         timeSelect.disabled = false; // Enable hour selection
+        //     } else {
+        //         dailyDateDiv.style.display = "none";
+        //         weeklyDateDiv.style.display = "block";
+                
+        //         // Disable and uncheck heatmap layer
+        //         if (hardBrakeLayer.checked) {
+        //             hardBrakeLayer.checked = false;
+        //             removeHeatmap(); // Remove heatmap if active
+        //             heatmapLoaded = false; // Reset heatmap status
+        //         }
+        //         hardBrakeLayer.disabled = true; // Disable checkbox
+        //         timeSelect.disabled = true; // Disable hour selection
+        //     }
+        // }
+
+
+
+
+        // function updateSelectedDate() {
+        //     selectedDate = document.getElementById("datepicker").value;
+        //     selectedHour = parseInt(document.getElementById("timeSelect").value, 10);
+        //     console.log("Selected Date:", selectedDate);
+        //     console.log("Selected Hour:", selectedHour);
+
+
+        //     // If heatmap is already loaded, update it when the hour changes
+        //     if (heatmapLoaded) {
+        //         loadHeatmapData();
+        //     }
+        // }
+
+        // Event listener for Hard Brake Layer checkbox
+        document.getElementById("HardbrakeLayer").addEventListener("change", function () {
+            if (this.checked) {
+                if (selectedDate) {
+                    heatmapLoaded = true; // Mark heatmap as active
+                    loadHeatmapData(); // Load and show heatmap
+                } else {
+                    alert("Please select a date first.");
+                    this.checked = false; // Uncheck if no date is selected
+                }
+            } else {
+                removeHeatmap();
+                heatmapLoaded = false; // Reset heatmap status
+            }
+        });
+
+
+
+        // Function to load and filter heatmap data based on selected date
+        function loadHeatmapData() {
+            fetch(`/api/filterHeatmapData?date=${selectedDate}&hour=${selectedHour}`) // Fetch filtered data from the Flask API
+                .then(response => response.json())
+                .then(heatData => {
+                    if (heatData.error) {
+                        alert(heatData.error);
+                        return;
+                    }
+                    console.log("Filtered Heat Data:", heatData);
+                    addHeatmapToMap(heatData);  // Add the heatmap to the map
+                })
+                .catch(error => console.error("Error loading heatmap data:", error));
+        }
+
+
+
+
+        // Function to add the heatmap layer to the map
+        function addHeatmapToMap(heatData) {
+            if (!heatData || heatData.length === 0) {
+                alert("⚠️ No heatmap data available for the selected date.");
+                return;
+            }
+
+            // Remove existing heatmap before adding a new one
+            removeHeatmap();
+
+            // Create the heatmap layer
+            heatmapLayer = L.heatLayer(heatData, {
+                radius: 12,
+                blur: 12,
+                maxZoom: 11
+            }).addTo(map);
+        }
+
+        // Function to remove the heatmap layer from the map
+        function removeHeatmap() {
+            if (heatmapLayer) {
+                map.removeLayer(heatmapLayer);
+                heatmapLayer = null;
+            }
+        }
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+        // // Event listener for the button click to display graphs
+        // document.getElementById("graphsButton").addEventListener("click", function() {
+        //     const graphContainer = document.getElementById("graphContainer");
+
+        //     // Show the floating container
+        //     graphContainer.style.display = "block";
+
+        //     // Fetch the images from the server and display them
+        //     const graphContainerContent = document.getElementById("graphs");
+
+        //     // Clear previous images (if any)
+        //     graphContainerContent.innerHTML = "";
+
+        //     const graphFiles = [
+        //         '/static/images/Saftey_Vs_Energy.png'
+        //     ];
+
+        //     // Loop through the graph files and create img elements to display
+        //     graphFiles.forEach(function(filePath) {
+        //         const imgElement = document.createElement('img');
+        //         imgElement.src = filePath;
+        //         graphContainerContent.appendChild(imgElement);
+        //     });
+        // });
+
+        // // Close button functionality
+        // document.getElementById("closeButton").addEventListener("click", function() {
+        //     const graphContainer = document.getElementById("graphContainer");
+
+        //     // Hide the floating container when close button is clicked
+        //     graphContainer.style.display = "none";
+        // });
+
+        // // Dragging functionality
+        // let isDragging = false;
+        // let offsetX, offsetY;
+
+        // const graphContainer = document.getElementById("graphContainer");
+
+        // // When mouse is down, start dragging
+        // graphContainer.addEventListener("mousedown", function(e) {
+        //     isDragging = true;
+
+        //     // Get the offset of the mouse from the top-left corner of the container
+        //     offsetX = e.clientX - graphContainer.getBoundingClientRect().left;
+        //     offsetY = e.clientY - graphContainer.getBoundingClientRect().top;
+
+        //     // Change the cursor to a grabbing hand while dragging
+        //     graphContainer.style.cursor = "grabbing";
+        // });
+
+        // // When mouse is moved, move the container
+        // document.addEventListener("mousemove", function(e) {
+        //     if (isDragging) {
+        //         // Calculate new position
+        //         const newX = e.clientX - offsetX;
+        //         const newY = e.clientY - offsetY;
+
+        //         // Set the new position of the container
+        //         graphContainer.style.left = newX + "px";
+        //         graphContainer.style.top = newY + "px";
+        //     }
+        // });
+
+        // // When mouse is up, stop dragging
+        // document.addEventListener("mouseup", function() {
+        //     isDragging = false;
+
+        //     // Reset the cursor to default
+        //     graphContainer.style.cursor = "move";
+        // });
+
+
+        
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+        // // Event listener for the button click to display graphs
+        // document.getElementById("graphsButton").addEventListener("click", function() {
+        //     const graphContainer = document.getElementById("graphContainer");
+
+        //     // Show the floating container
+        //     graphContainer.style.display = "block";
+
+        //     // Fetch selected checkboxes from the active tab
+        //     const selectedOptions = [];
+
+        //     // Get the active tab
+        //     const activeTab = document.querySelector(".tab-link.active").getAttribute("data-tab");
+
+        //     // Based on the active tab, check the checkboxes
+        //     if (activeTab === "2D") {
+        //         // Check checkboxes in the 2D tab
+        //         if (document.getElementById("hardBrakes").checked) selectedOptions.push('hardBrakes');
+        //         if (document.getElementById("emission").checked) selectedOptions.push('emission');
+        //         if (document.getElementById("numStops").checked) selectedOptions.push('numStops');
+        //     } else if (activeTab === "3D") {
+        //         // Check checkbox in the 3D tab
+        //         if (document.getElementById("allMOEs").checked) selectedOptions.push('allMOEs');
+        //     }
+
+        //     // Determine which graph to display based on selected options
+        //     const graphContainerContent = document.getElementById("graphs");
+        //     graphContainerContent.innerHTML = "";  // Clear previous graph
+
+        //     if (selectedOptions.includes('hardBrakes') && selectedOptions.includes('emission')) {
+        //         const imgElement = document.createElement('img');
+        //         imgElement.src = '/static/images/Saftey_Vs_Energy.png';
+        //         imgElement.style.width = '100%';
+        //         graphContainerContent.appendChild(imgElement);
+        //     } else if (selectedOptions.includes('emission') && selectedOptions.includes('numStops')) {
+        //         const imgElement = document.createElement('img');
+        //         imgElement.src = '/static/images/Energy_Vs_Mobility.png';
+        //         imgElement.style.width = '100%';
+        //         graphContainerContent.appendChild(imgElement);
+        //     } else if (selectedOptions.includes('numStops') && selectedOptions.includes('hardBrakes')) {
+        //         const imgElement = document.createElement('img');
+        //         imgElement.src = '/static/images/Mobility_Vs_Saftey.png';
+        //         imgElement.style.width = '100%';
+        //         graphContainerContent.appendChild(imgElement);
+        //     } else if (selectedOptions.includes('allMOEs')) {
+        //         // Display a default graph for 'allMOEs'
+        //         const imgElement = document.createElement('img');
+        //         imgElement.src = '/static/images/default_graph.png';  // Replace with appropriate graph for 'allMOEs'
+        //         imgElement.style.width = '100%';
+        //         graphContainerContent.appendChild(imgElement);
+        //     } else {
+        //         graphContainerContent.innerHTML = "No matching graph for the selected options.";
+        //     }
+        // });
+
+        // // Close button functionality
+        // document.getElementById("closeButton").addEventListener("click", function() {
+        //     const graphContainer = document.getElementById("graphContainer");
+
+        //     // Hide the floating container when close button is clicked
+        //     graphContainer.style.display = "none";
+        // });
+
+        // // Dragging functionality
+        // let isDragging = false;
+        // let offsetX, offsetY;
+
+        // const graphContainer = document.getElementById("graphContainer");
+
+        // // When mouse is down, start dragging
+        // graphContainer.addEventListener("mousedown", function(e) {
+        //     isDragging = true;
+
+        //     // Get the offset of the mouse from the top-left corner of the container
+        //     offsetX = e.clientX - graphContainer.getBoundingClientRect().left;
+        //     offsetY = e.clientY - graphContainer.getBoundingClientRect().top;
+
+        //     // Change the cursor to a grabbing hand while dragging
+        //     graphContainer.style.cursor = "grabbing";
+        // });
+
+        // // When mouse is moved, move the container
+        // document.addEventListener("mousemove", function(e) {
+        //     if (isDragging) {
+        //         // Calculate new position
+        //         const newX = e.clientX - offsetX;
+        //         const newY = e.clientY - offsetY;
+
+        //         // Set the new position of the container
+        //         graphContainer.style.left = newX + "px";
+        //         graphContainer.style.top = newY + "px";
+        //     }
+        // });
+
+        // // When mouse is up, stop dragging
+        // document.addEventListener("mouseup", function() {
+        //     isDragging = false;
+
+        //     // Reset the cursor to default
+        //     graphContainer.style.cursor = "move";
+        // });
+
+
+
+                // Event listener for the button click to display graphs
+        document.getElementById("graphsButton").addEventListener("click", function() {
+            const graphContainer = document.getElementById("graphContainer");
+
+            // Show the floating container
+            graphContainer.style.display = "block";
+
+            // Fetch selected checkboxes from the active tab
+            const selectedOptions = [];
+
+            // Get the active tab
+            const activeTab = document.querySelector(".tab-link.active").getAttribute("data-tab");
+
+            // Based on the active tab, check the checkboxes
+            if (activeTab === "2D") {
+                // Check checkboxes in the 2D tab
+                if (document.getElementById("hardBrakes").checked) selectedOptions.push('hardBrakes');
+                if (document.getElementById("emission").checked) selectedOptions.push('emission');
+                if (document.getElementById("numStops").checked) selectedOptions.push('numStops');
+            } else if (activeTab === "3D") {
+                // Check checkbox in the 3D tab
+                if (document.getElementById("allMOEs").checked) selectedOptions.push('allMOEs');
+            }
+
+            // Determine which graph to display based on selected options
+            const graphContainerContent = document.getElementById("graphs");
+            graphContainerContent.innerHTML = "";  // Clear previous graph
+
+            // Load the appropriate graph based on selected options
+            let imgElement;
+
+            if (selectedOptions.includes('hardBrakes') && selectedOptions.includes('emission')) {
+                imgElement = document.createElement('img');
+                imgElement.src = '/static/images/Saftey_Vs_Energy.png' + '?' + new Date().getTime(); // Add timestamp to force reload
+                imgElement.style.width = '100%';
+                graphContainerContent.appendChild(imgElement);
+            } else if (selectedOptions.includes('emission') && selectedOptions.includes('numStops')) {
+                imgElement = document.createElement('img');
+                imgElement.src = '/static/images/Energy_Vs_Mobility.png' + '?' + new Date().getTime(); // Add timestamp to force reload
+                imgElement.style.width = '100%';
+                graphContainerContent.appendChild(imgElement);
+            } else if (selectedOptions.includes('numStops') && selectedOptions.includes('hardBrakes')) {
+                imgElement = document.createElement('img');
+                imgElement.src = '/static/images/Mobility_Vs_Saftey.png' + '?' + new Date().getTime(); // Add timestamp to force reload
+                imgElement.style.width = '100%';
+                graphContainerContent.appendChild(imgElement);
+            } else if (selectedOptions.includes('allMOEs')) {
+                // Display a default graph for 'allMOEs'
+                imgElement = document.createElement('img');
+                imgElement.src = '/static/images/3D_Pareto_Front_Graph.png' + '?' + new Date().getTime(); // Add timestamp to force reload
+                imgElement.style.width = '100%';
+                graphContainerContent.appendChild(imgElement);
+            } else {
+                graphContainerContent.innerHTML = "No matching graph for the selected options.";
+            }
+        });
+
+        // Close button functionality
+        document.getElementById("closeButton").addEventListener("click", function() {
+            const graphContainer = document.getElementById("graphContainer");
+
+            // Hide the floating container when close button is clicked
+            graphContainer.style.display = "none";
+        });
+
+        // Dragging functionality
+        let isDragging = false;
+        let offsetX, offsetY;
+
+        const graphContainer = document.getElementById("graphContainer");
+
+        // When mouse is down, start dragging
+        graphContainer.addEventListener("mousedown", function(e) {
+            isDragging = true;
+
+            // Get the offset of the mouse from the top-left corner of the container
+            offsetX = e.clientX - graphContainer.getBoundingClientRect().left;
+            offsetY = e.clientY - graphContainer.getBoundingClientRect().top;
+
+            // Change the cursor to a grabbing hand while dragging
+            graphContainer.style.cursor = "grabbing";
+        });
+
+        // When mouse is moved, move the container
+        document.addEventListener("mousemove", function(e) {
+            if (isDragging) {
+                // Calculate new position
+                const newX = e.clientX - offsetX;
+                const newY = e.clientY - offsetY;
+
+                // Set the new position of the container
+                graphContainer.style.left = newX + "px";
+                graphContainer.style.top = newY + "px";
+            }
+        });
+
+        // When mouse is up, stop dragging
+        document.addEventListener("mouseup", function() {
+            isDragging = false;
+
+            // Reset the cursor to default
+            graphContainer.style.cursor = "move";
+        });
+
+        // Flag to track if the graph has been downloaded
+        let isGraphDownloaded = false;
+        let isGraphContainerOpen = false;  // Track if the container is open
+
+        document.getElementById('downloadButton').addEventListener('click', function(event) {
+            let graphElement = document.getElementById('graphs'); 
+            
+            if (graphElement) {
+                html2canvas(graphElement).then(canvas => {
+                    let link = document.createElement('a');
+                    link.href = canvas.toDataURL('image/png');
+                    link.download = 'graph.png';
+                    link.click();
+
+                    // Set the flag to true once the graph is downloaded
+                    isGraphDownloaded = true;
+
+                    // Close the container after download
+                    let graphContainer = document.getElementById('graphContainer');
+                    graphContainer.style.display = 'none';  // Close the container
+                    isGraphContainerOpen = false;  // Mark the container as closed
+                });
+            }
+
+            // Prevent the click event from causing the container to open again
+            event.stopPropagation();
+        });
+
+        document.getElementById('closeButton').addEventListener('click', function() {
+            let graphContainer = document.getElementById('graphContainer');
+
+            // Close the container (whether or not the graph was downloaded)
+            graphContainer.style.display = 'none';
+            isGraphContainerOpen = false;  // Mark the container as closed
+        });
+
+        // Function to manually show the graph container
+        function showGraphContainer() {
+            // Only show the container if it's not already open
+            if (!isGraphContainerOpen) {
+                let graphContainer = document.getElementById('graphContainer');
+                graphContainer.style.display = 'block';
+                isGraphContainerOpen = true;  // Mark the container as open
+            }
+        }
+
+    </script>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</body>
+</html>
